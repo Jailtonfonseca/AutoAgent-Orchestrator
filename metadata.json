@@ -1,0 +1,5 @@
+{
+  "name": "AutoAgent Orchestrator",
+  "description": "Multi-agent system with dynamic credential management and LLM verification.",
+  "requestFramePermissions": []
+}
