@@ -5,6 +5,97 @@ import { MessageKind, WSMessage, AgentMessage, VerifierResult, CredentialRequest
 
 // --- Components ---
 
+const SetupModal = ({ onComplete }: { onComplete: () => void }) => {
+  const [provider, setProvider] = useState('gemini');
+  const [apiKey, setApiKey] = useState('');
+  const [model, setModel] = useState('gemini-3-flash-preview');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await fetch('/api/config/llm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider, apiKey, model })
+      });
+      onComplete();
+    } catch (e) {
+      console.error(e);
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-zinc-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl"
+      >
+        <div className="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center mb-6">
+          <SettingsIcon className="w-8 h-8 text-emerald-600" />
+        </div>
+        <h2 className="text-2xl font-bold mb-2">Welcome to AutoAgent</h2>
+        <p className="text-zinc-500 mb-6">
+          Please configure your primary LLM provider to get started. This will be used for both the Agents and the Verifier.
+        </p>
+        
+        <div className="space-y-4 mb-6">
+          <div>
+            <label className="block text-sm font-bold text-zinc-700 mb-1">Provider</label>
+            <select 
+              value={provider} 
+              onChange={(e) => {
+                setProvider(e.target.value);
+                if (e.target.value === 'gemini') setModel('gemini-3-flash-preview');
+                if (e.target.value === 'openai') setModel('gpt-4o');
+                if (e.target.value === 'anthropic') setModel('claude-3-5-sonnet-20241022');
+                if (e.target.value === 'openrouter') setModel('openai/gpt-4o');
+              }}
+              className="w-full p-3 rounded-xl border border-black/10 outline-none focus:ring-2 focus:ring-emerald-500/20"
+            >
+              <option value="gemini">Google Gemini</option>
+              <option value="openai">OpenAI</option>
+              <option value="anthropic">Anthropic</option>
+              <option value="openrouter">OpenRouter</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-zinc-700 mb-1">Model</label>
+            <input
+              type="text"
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              className="w-full p-3 rounded-xl border border-black/10 outline-none focus:ring-2 focus:ring-emerald-500/20"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-zinc-700 mb-1">API Key</label>
+            <input
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder={`Enter your ${provider} API Key`}
+              className="w-full p-3 rounded-xl border border-black/10 outline-none focus:ring-2 focus:ring-emerald-500/20"
+            />
+          </div>
+        </div>
+
+        <button
+          onClick={handleSave}
+          disabled={!apiKey || saving}
+          className="w-full py-4 bg-black text-white rounded-2xl font-bold hover:bg-zinc-800 disabled:opacity-50 transition-all"
+        >
+          {saving ? 'Saving...' : 'Save & Continue'}
+        </button>
+      </motion.div>
+    </div>
+  );
+};
+
 const ConfigPanel = ({ onStart, isRunning }: { onStart: (config: any) => void, isRunning: boolean }) => {
   const [task, setTask] = useState('');
   const [autoApply, setAutoApply] = useState(true);
@@ -225,11 +316,24 @@ export default function App() {
   const [messages, setMessages] = useState<any[]>([]);
   const [credentials, setCredentials] = useState<any[]>([]);
   const [pendingRequest, setPendingRequest] = useState<CredentialRequest | null>(null);
+  const [isSetupComplete, setIsSetupComplete] = useState<boolean | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
     fetchCredentials();
+    checkSetup();
   }, []);
+
+  const checkSetup = async () => {
+    try {
+      const res = await fetch('/api/config/llm');
+      const data = await res.json();
+      setIsSetupComplete(data.configured);
+    } catch (e) {
+      console.error("Failed to check setup", e);
+      setIsSetupComplete(false);
+    }
+  };
 
   const fetchCredentials = async () => {
     try {
@@ -290,8 +394,11 @@ export default function App() {
     }
   };
 
+  if (isSetupComplete === null) return null;
+
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900 font-sans p-8">
+      {!isSetupComplete && <SetupModal onComplete={() => setIsSetupComplete(true)} />}
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Left Column: Config & Settings */}
         <div className="lg:col-span-4 space-y-8">

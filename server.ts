@@ -4,6 +4,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { v4 as uuidv4 } from "uuid";
 import { TaskRunner } from "./src/backend/runner";
 import { credentialStore } from "./src/backend/credentials";
+import { getLLMConfig, setLLMConfig } from "./src/backend/llm";
 
 async function startServer() {
   const app = express();
@@ -15,6 +16,21 @@ async function startServer() {
 
   // API Routes
   app.get("/api/health", (req, res) => {
+    res.json({ status: "ok" });
+  });
+
+  app.get("/api/config/llm", (req, res) => {
+    const config = getLLMConfig();
+    if (config) {
+      res.json({ configured: true, provider: config.provider, model: config.model });
+    } else {
+      res.json({ configured: false });
+    }
+  });
+
+  app.post("/api/config/llm", (req, res) => {
+    const { provider, apiKey, model } = req.body;
+    setLLMConfig({ provider, apiKey, model });
     res.json({ status: "ok" });
   });
 

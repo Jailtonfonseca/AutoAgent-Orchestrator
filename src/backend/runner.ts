@@ -1,6 +1,5 @@
 import { WebSocket } from "ws";
 import { v4 as uuidv4 } from "uuid";
-import { GoogleGenAI } from "@google/genai";
 import { 
   TaskConfig, 
   MessageKind, 
@@ -12,18 +11,17 @@ import {
 } from "../types";
 import { verifier } from "./verifier";
 import { credentialStore } from "./credentials";
+import { generateContent } from "./llm";
 
 export class TaskRunner {
   private ws: WebSocket;
   private config: TaskConfig;
-  private ai: GoogleGenAI;
   private agents: any[] = [];
   private isRunning: boolean = true;
 
   constructor(ws: WebSocket, config: TaskConfig) {
     this.ws = ws;
     this.config = config;
-    this.ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
   }
 
   private pushEvent(kind: MessageKind, payload: any) {
@@ -54,12 +52,11 @@ export class TaskRunner {
         this.pushEvent(MessageKind.INFO, { msg: `${agent.name} is thinking...`, ts: Date.now() });
 
         // Simulate agent generation
-        const agentResponse = await this.ai.models.generateContent({
-          model: "gemini-3-flash-preview",
-          contents: `You are ${agent.name}, a ${agent.role}. Task: ${this.config.task}. Previous context: ${lastMessage}. Continue the work. If you need a specific API key (like GitHub, Slack, etc.), explicitly state: "I need a [provider] credential for [reason]".`,
-        });
+        const systemPrompt = `You are ${agent.name}, a ${agent.role}. Task: ${this.config.task}. Continue the work. If you need a specific API key (like GitHub, Slack, etc.), explicitly state: "I need a [provider] credential for [reason]".`;
+        const prompt = `Previous context: ${lastMessage}`;
+        
+        const content = await generateContent(systemPrompt, prompt, false);
 
-        const content = agentResponse.text || "No response";
         const msg: AgentMessage = {
           sender: agent.name,
           recipient,

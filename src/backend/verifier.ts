@@ -1,13 +1,7 @@
-import { GoogleGenAI, Type } from "@google/genai";
 import { VerifierResult } from "../types";
+import { generateContent } from "./llm";
 
 export class Verifier {
-  private ai: GoogleGenAI;
-
-  constructor() {
-    this.ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
-  }
-
   async verify(task: string, sender: string, recipient: string, message: string): Promise<VerifierResult> {
     const prompt = `Context:
 - task: ${task}
@@ -25,31 +19,15 @@ Instructions:
    - patch_for_agent: optional string (system prompt patch)
 Only output valid JSON (start with { and end with }).`;
 
-    try {
-      const response = await this.ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: prompt,
-        config: {
-          systemInstruction: "You are an automated verifier. Return ONLY a single JSON object. No extra commentary.",
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              verdict: { type: Type.STRING, enum: ["pass", "fail"] },
-              confidence: { type: Type.NUMBER },
-              reason: { type: Type.STRING },
-              suggested_actions: { 
-                type: Type.ARRAY, 
-                items: { type: Type.STRING } 
-              },
-              patch_for_agent: { type: Type.STRING }
-            },
-            required: ["verdict", "confidence", "reason", "suggested_actions"]
-          }
-        }
-      });
+    const systemInstruction = "You are an automated verifier. Return ONLY a single JSON object. No extra commentary.";
 
-      const result = JSON.parse(response.text || "{}");
+    try {
+      const text = await generateContent(systemInstruction, prompt, true);
+      
+      // Clean up markdown code blocks if any
+      const cleanedText = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      const result = JSON.parse(cleanedText || "{}");
+      
       return {
         ...result,
         ts: Date.now()
