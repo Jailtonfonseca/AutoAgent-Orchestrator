@@ -2,7 +2,7 @@ import { VerifierResult } from "../types";
 import { generateContent } from "./llm";
 
 export class Verifier {
-  async verify(task: string, sender: string, recipient: string, message: string): Promise<VerifierResult> {
+  async verify(task: string, sender: string, recipient: string, message: string, language: string = "English"): Promise<VerifierResult> {
     const prompt = `Context:
 - task: ${task}
 - sender: ${sender}
@@ -14,8 +14,8 @@ Instructions:
 2) Output JSON with keys:
    - verdict: "pass" or "fail"
    - confidence: number (0.0 - 1.0)
-   - reason: short string
-   - suggested_actions: array of strings (allowed actions: "modify_agent_system_prompt: ...", "add_agent:Role:desc", "remove_agent:AgentName", "request_credential:provider:reason", "request_references", "reduce_temperature", "increase_temperature")
+   - reason: short string (Write this in ${language})
+   - suggested_actions: array of strings (allowed actions: "modify_agent_system_prompt: ...", "add_agent:Role:desc", "remove_agent:AgentName", "request_credential:provider:reason", "request_references", "reduce_temperature", "increase_temperature") (Write any descriptions/reasons in ${language})
    - patch_for_agent: optional string (system prompt patch)
 Only output valid JSON (start with { and end with }).`;
 

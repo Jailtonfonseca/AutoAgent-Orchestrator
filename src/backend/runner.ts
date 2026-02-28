@@ -32,27 +32,61 @@ export class TaskRunner {
   }
 
   async run() {
-    this.pushEvent(MessageKind.INFO, { msg: "Initializing agents...", ts: Date.now() });
+    const isPt = this.config.language === 'Portuguese';
+    this.pushEvent(MessageKind.INFO, { 
+      msg: isPt ? "Analisando o problema e recrutando a equipe ideal..." : "Analyzing task and recruiting the ideal team...", 
+      ts: Date.now() 
+    });
     
-    // Simulate AgentBuilder
-    this.agents = [
-      { name: "Researcher", role: "Gather information" },
-      { name: "Writer", role: "Synthesize findings" }
-    ];
-
     try {
+      // Simulate AgentBuilder
+      const builderPrompt = `Analyze the following task and determine the ideal team of AI agents needed to solve it.
+Task: ${this.config.task}
+
+Return ONLY a JSON array of objects. Each object must have a "name" (string, no spaces, e.g., "MarketingExpert") and a "role" (string, detailed description of their responsibilities).
+Maximum number of agents: ${this.config.max_agents || 3}.`;
+
+      const builderSystemPrompt = "You are an expert AI team builder. Return ONLY valid JSON.";
+      
+      const builderResponse = await generateContent(builderSystemPrompt, builderPrompt, true);
+      const cleanedResponse = builderResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      
+      this.agents = JSON.parse(cleanedResponse);
+      
+      if (!Array.isArray(this.agents) || this.agents.length === 0) {
+        // Fallback if parsing fails or returns empty
+        this.agents = [
+          { name: "Analyst", role: "Analyze the core requirements" },
+          { name: "Executor", role: "Execute the plan" }
+        ];
+      }
+
+      const agentNames = this.agents.map(a => a.name).join(", ");
+      this.pushEvent(MessageKind.INFO, { 
+        msg: isPt ? `Equipe contratada autonomamente: [${agentNames}]` : `Autonomously recruited team: [${agentNames}]`, 
+        ts: Date.now() 
+      });
+      this.pushEvent(MessageKind.INFO, { 
+        msg: isPt ? "--- Iniciando a Reunião de Trabalho ---" : "--- Starting Work Session ---", 
+        ts: Date.now() 
+      });
+
       let currentTurn = 0;
-      const maxTurns = 5;
+      const maxTurns = 15; // Increased to match the requested max_round=15
       let lastMessage = this.config.task;
+      const conversationHistory: string[] = [`User Task: ${this.config.task}`];
 
       while (this.isRunning && currentTurn < maxTurns) {
         const agent = this.agents[currentTurn % this.agents.length];
         const recipient = this.agents[(currentTurn + 1) % this.agents.length].name;
         
-        this.pushEvent(MessageKind.INFO, { msg: `${agent.name} is thinking...`, ts: Date.now() });
+        this.pushEvent(MessageKind.INFO, { 
+          msg: isPt ? `${agent.name} está pensando...` : `${agent.name} is thinking...`, 
+          ts: Date.now() 
+        });
 
         // Simulate agent generation
-        const systemPrompt = `You are ${agent.name}, a ${agent.role}. Task: ${this.config.task}. Continue the work. If you need a specific API key (like GitHub, Slack, etc.), explicitly state: "I need a [provider] credential for [reason]".`;
+        const systemPrompt = `You are ${agent.name}, a ${agent.role}. Task: ${this.config.task}. Continue the work. If you need a specific API key (like GitHub, Slack, etc.), explicitly state: "I need a [provider] credential for [reason]".\n\nIMPORTANT: You must write all your responses and thoughts in ${this.config.language || 'English'}.`;
         const prompt = `Previous context: ${lastMessage}`;
         
         const content = await generateContent(systemPrompt, prompt, false);
@@ -66,21 +100,57 @@ export class TaskRunner {
         this.pushEvent(MessageKind.AGENT_MESSAGE, msg);
 
         // Verify
-        const verification = await verifier.verify(this.config.task, agent.name, recipient, content);
+        const verification = await verifier.verify(this.config.task, agent.name, recipient, content, this.config.language);
         this.pushEvent(MessageKind.VERIFIER_RESULT, verification);
 
         // Handle actions
         await this.applyActions(verification);
 
         lastMessage = content;
+        conversationHistory.push(`${agent.name}: ${content}`);
         currentTurn++;
         
-        if (content.toLowerCase().includes("task complete") || content.toLowerCase().includes("finished")) {
+        if (content.toLowerCase().includes("task complete") || content.toLowerCase().includes("finished") || content.toLowerCase().includes("tarefa concluída")) {
           break;
         }
       }
 
-      this.pushEvent(MessageKind.FINISHED, { msg: "Task execution completed.", ts: Date.now() });
+      this.pushEvent(MessageKind.INFO, { 
+        msg: isPt ? "Execução da tarefa concluída. Gerando infográfico final..." : "Task execution completed. Generating final infographic...", 
+        ts: Date.now() 
+      });
+
+      // Generate Infographic
+      const infographicPrompt = `Based on the following conversation, generate a complete, visually appealing HTML infographic summarizing the final plan, target audience, channels, costs, and any other key data points.
+Write all text in ${this.config.language || 'English'}.
+Use modern CSS (you must use Tailwind CSS via CDN: <script src="https://cdn.tailwindcss.com"></script>).
+Make it look professional, modern, and ready to print or save as PDF. Use icons (e.g., FontAwesome CDN or SVG), cards, and clear typography.
+The output must be a single, valid HTML file containing the visual summary.
+Return ONLY the HTML code, starting with <!DOCTYPE html>.
+
+Conversation History:
+${conversationHistory.join("\n\n")}
+`;
+
+      const infographicSystemPrompt = "You are an expert designer and data analyst. Return ONLY valid HTML code. Do not include markdown formatting like ```html.";
+      
+      try {
+        const htmlResponse = await generateContent(infographicSystemPrompt, infographicPrompt, false);
+        const cleanedHtml = htmlResponse.replace(/```html\n?/g, '').replace(/```\n?/g, '').trim();
+
+        this.pushEvent(MessageKind.INFOGRAPHIC_READY, {
+          html: cleanedHtml,
+          ts: Date.now()
+        });
+        
+        this.pushEvent(MessageKind.INFO, { 
+          msg: isPt ? "Infográfico gerado com sucesso!" : "Infographic generated successfully!", 
+          ts: Date.now() 
+        });
+      } catch (e: any) {
+        this.pushEvent(MessageKind.ERROR, { msg: `Failed to generate infographic: ${e.message}`, ts: Date.now() });
+      }
+
     } catch (error: any) {
       this.pushEvent(MessageKind.ERROR, { msg: error.message, ts: Date.now() });
     }

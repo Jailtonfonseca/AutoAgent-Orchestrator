@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Terminal, Shield, Key, Settings as SettingsIcon, Play, Square, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Send, Terminal, Shield, Key, Settings as SettingsIcon, Play, Square, AlertCircle, CheckCircle2, Download, Eye } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MessageKind, WSMessage, AgentMessage, VerifierResult, CredentialRequest, ActionResult } from './types';
 
@@ -99,13 +99,27 @@ const SetupModal = ({ onComplete }: { onComplete: () => void }) => {
 const ConfigPanel = ({ onStart, isRunning }: { onStart: (config: any) => void, isRunning: boolean }) => {
   const [task, setTask] = useState('');
   const [autoApply, setAutoApply] = useState(true);
+  const [language, setLanguage] = useState('English');
 
   return (
     <div className="bg-white rounded-2xl p-6 shadow-sm border border-black/5">
-      <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-        <Play className="w-5 h-5 text-emerald-500" />
-        New Task
-      </h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-semibold flex items-center gap-2">
+          <Play className="w-5 h-5 text-emerald-500" />
+          New Task
+        </h2>
+        <select 
+          value={language} 
+          onChange={(e) => setLanguage(e.target.value)}
+          className="text-sm p-2 rounded-lg border border-black/10 outline-none focus:ring-2 focus:ring-emerald-500/20 bg-zinc-50"
+        >
+          <option value="English">English</option>
+          <option value="Portuguese">Português</option>
+          <option value="Spanish">Español</option>
+          <option value="French">Français</option>
+          <option value="German">Deutsch</option>
+        </select>
+      </div>
       <textarea
         value={task}
         onChange={(e) => setTask(e.target.value)}
@@ -121,7 +135,7 @@ const ConfigPanel = ({ onStart, isRunning }: { onStart: (config: any) => void, i
           <span className="text-sm font-medium text-zinc-600 group-hover:text-zinc-900">Auto-apply actions</span>
         </label>
         <button
-          onClick={() => onStart({ task, autoApply })}
+          onClick={() => onStart({ task, autoApply, language })}
           disabled={isRunning || !task.trim()}
           className="px-6 py-2 bg-black text-white rounded-xl font-medium hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
         >
@@ -317,6 +331,7 @@ export default function App() {
   const [credentials, setCredentials] = useState<any[]>([]);
   const [pendingRequest, setPendingRequest] = useState<CredentialRequest | null>(null);
   const [isSetupComplete, setIsSetupComplete] = useState<boolean | null>(null);
+  const [infographic, setInfographic] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
@@ -347,6 +362,7 @@ export default function App() {
 
   const startTask = async (config: any) => {
     setMessages([]);
+    setInfographic(null);
     setIsRunning(true);
     try {
       const res = await fetch('/api/start-task', {
@@ -366,6 +382,8 @@ export default function App() {
 
         if (msg.kind === MessageKind.CREDENTIAL_REQUEST) {
           setPendingRequest(msg.payload);
+        } else if (msg.kind === MessageKind.INFOGRAPHIC_READY) {
+          setInfographic(msg.payload.html);
         } else if (msg.kind === MessageKind.FINISHED || msg.kind === MessageKind.ERROR) {
           setIsRunning(false);
         }
@@ -402,14 +420,23 @@ export default function App() {
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Left Column: Config & Settings */}
         <div className="lg:col-span-4 space-y-8">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center">
-              <Shield className="text-white w-6 h-6" />
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center">
+                <Shield className="text-white w-6 h-6" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight">AutoAgent</h1>
+                <p className="text-xs text-zinc-500 font-medium uppercase tracking-widest">Orchestrator v1.0</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">AutoAgent</h1>
-              <p className="text-xs text-zinc-500 font-medium uppercase tracking-widest">Orchestrator v1.0</p>
-            </div>
+            <button 
+              onClick={() => setIsSetupComplete(false)}
+              className="p-2 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors"
+              title="Configure LLM"
+            >
+              <SettingsIcon className="w-5 h-5" />
+            </button>
           </div>
           
           <ConfigPanel onStart={startTask} isRunning={isRunning} />
@@ -417,8 +444,55 @@ export default function App() {
         </div>
 
         {/* Right Column: Audit Trail */}
-        <div className="lg:col-span-8">
+        <div className="lg:col-span-8 space-y-4">
           <Chat messages={messages} />
+          
+          <AnimatePresence>
+            {infographic && (
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-6 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-center justify-between"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center text-white shadow-lg shadow-emerald-500/30">
+                    <Download className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-emerald-800 text-lg">Infográfico Pronto!</h3>
+                    <p className="text-sm text-emerald-600 font-medium">O resumo visual da tarefa foi gerado com sucesso.</p>
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <button 
+                    onClick={() => {
+                      const blob = new Blob([infographic], { type: 'text/html' });
+                      const url = URL.createObjectURL(blob);
+                      window.open(url, '_blank');
+                    }} 
+                    className="px-5 py-2.5 bg-white text-emerald-700 font-bold rounded-xl shadow-sm hover:bg-emerald-50 transition-all flex items-center gap-2"
+                  >
+                    <Eye className="w-4 h-4" />
+                    Visualizar
+                  </button>
+                  <button 
+                    onClick={() => {
+                      const blob = new Blob([infographic], { type: 'text/html' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = 'infografico-autoagent.html';
+                      a.click();
+                    }} 
+                    className="px-5 py-2.5 bg-emerald-500 text-white font-bold rounded-xl shadow-sm hover:bg-emerald-600 transition-all flex items-center gap-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    Baixar HTML
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 

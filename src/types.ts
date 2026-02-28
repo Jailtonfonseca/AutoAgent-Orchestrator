@@ -8,6 +8,7 @@ export enum MessageKind {
   INFO = "info",
   ERROR = "error",
   FINISHED = "finished",
+  INFOGRAPHIC_READY = "infographic_ready",
 }
 
 export interface AgentMessage {
@@ -42,6 +43,11 @@ export interface ActionResult {
   ts: number;
 }
 
+export interface InfographicPayload {
+  html: string;
+  ts: number;
+}
+
 export interface WSMessage {
   kind: MessageKind;
   payload: any;
@@ -53,4 +59,5 @@ export interface TaskConfig {
   max_agents: number;
   auto_apply: boolean;
   user_id: string;
+  language?: string;
 }

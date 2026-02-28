@@ -13,6 +13,7 @@ async function startServer() {
   app.use(express.json());
 
   const runners = new Map<string, TaskRunner>();
+  const taskConfigs = new Map<string, any>();
 
   // API Routes
   app.get("/api/health", (req, res) => {
@@ -35,8 +36,9 @@ async function startServer() {
   });
 
   app.post("/api/start-task", (req, res) => {
-    const { task, model, max_agents, auto_apply, user_id } = req.body;
+    const { task, model, max_agents, auto_apply, user_id, language } = req.body;
     const taskId = uuidv4();
+    taskConfigs.set(taskId, { task, model, max_agents, auto_apply, user_id, language });
     res.json({ task_id: taskId, ws: `/ws/${taskId}` });
   });
 
@@ -84,22 +86,21 @@ async function startServer() {
       });
 
       // Start the runner
-      // In a real app, we'd get the config from a DB using taskId
-      // For this demo, we'll assume the client sends config or we mock it
-      // Let's wait for a 'start' command or just mock it for now
-      // Actually, the /start-task should probably pass the config
-      // We'll use a simple mock config for the demo
-      const mockConfig = {
+      const config = taskConfigs.get(taskId) || {
         task: "Research the latest trends in AI agents and write a summary.",
         model: "gemini-3-flash-preview",
         max_agents: 3,
         auto_apply: true,
-        user_id: "demo-user"
+        user_id: "demo-user",
+        language: "English"
       };
 
-      const runner = new TaskRunner(ws, mockConfig);
+      const runner = new TaskRunner(ws, config);
       runners.set(taskId, runner);
-      runner.run().finally(() => runners.delete(taskId));
+      runner.run().finally(() => {
+        runners.delete(taskId);
+        taskConfigs.delete(taskId);
+      });
     }
   });
 }
