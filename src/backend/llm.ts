@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 
-export type Provider = 'gemini' | 'openai' | 'anthropic' | 'openrouter';
+export type Provider = 'gemini' | 'openai' | 'anthropic' | 'openrouter' | 'deepseek' | 'groq';
 
 export interface LLMConfig {
   provider: Provider;
@@ -36,10 +36,20 @@ export async function generateContent(systemPrompt: string, prompt: string, json
     return response.text || "";
   } 
   
-  if (provider === 'openai' || provider === 'openrouter') {
-    const baseUrl = provider === 'openrouter' 
-      ? "https://openrouter.ai/api/v1/chat/completions" 
-      : "https://api.openai.com/v1/chat/completions";
+  if (provider === 'openai' || provider === 'openrouter' || provider === 'deepseek' || provider === 'groq') {
+    let baseUrl = "https://api.openai.com/v1/chat/completions";
+    let defaultModel = "gpt-4o";
+    
+    if (provider === 'openrouter') {
+      baseUrl = "https://openrouter.ai/api/v1/chat/completions";
+      defaultModel = "openai/gpt-4o";
+    } else if (provider === 'deepseek') {
+      baseUrl = "https://api.deepseek.com/v1/chat/completions";
+      defaultModel = "deepseek-chat";
+    } else if (provider === 'groq') {
+      baseUrl = "https://api.groq.com/openai/v1/chat/completions";
+      defaultModel = "llama3-8b-8192";
+    }
       
     const res = await fetch(baseUrl, {
       method: "POST",
@@ -49,12 +59,12 @@ export async function generateContent(systemPrompt: string, prompt: string, json
         ...(provider === 'openrouter' ? { "HTTP-Referer": process.env.APP_URL || "http://localhost:3000", "X-Title": "AutoAgent" } : {})
       },
       body: JSON.stringify({
-        model: model || (provider === 'openai' ? "gpt-4o" : "openai/gpt-4o"),
+        model: model || defaultModel,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: prompt }
         ],
-        response_format: jsonMode && provider === 'openai' ? { type: "json_object" } : undefined
+        response_format: jsonMode && (provider === 'openai' || provider === 'groq') ? { type: "json_object" } : undefined
       })
     });
     if (!res.ok) {

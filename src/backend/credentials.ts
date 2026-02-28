@@ -54,6 +54,13 @@ export class CredentialStore {
     return encrypted ? this.decrypt(encrypted) : null;
   }
 
+  delete(userId: string, provider: string): void {
+    const userStore = this.store.get(userId);
+    if (userStore) {
+      userStore.delete(provider);
+    }
+  }
+
   has(userId: string, provider: string): boolean {
     return this.store.get(userId)?.has(provider) || false;
   }

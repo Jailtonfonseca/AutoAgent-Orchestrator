@@ -9,6 +9,8 @@ export enum MessageKind {
   ERROR = "error",
   FINISHED = "finished",
   INFOGRAPHIC_READY = "infographic_ready",
+  USER_MESSAGE = "user_message",
+  FINAL_OUTPUT = "final_output",
 }
 
 export interface AgentMessage {
@@ -30,6 +32,7 @@ export interface VerifierResult {
 export interface CredentialRequest {
   provider: string;
   description: string;
+  instructions?: string;
   scope?: string;
   request_id: string;
   user_id: string;
@@ -45,6 +48,17 @@ export interface ActionResult {
 
 export interface InfographicPayload {
   html: string;
+  ts: number;
+}
+
+export interface UserMessage {
+  text: string;
+  ts: number;
+}
+
+export interface FinalOutputPayload {
+  content: string;
+  format: string;
   ts: number;
 }
 

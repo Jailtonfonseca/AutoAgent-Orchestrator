@@ -15,7 +15,7 @@ Instructions:
    - verdict: "pass" or "fail"
    - confidence: number (0.0 - 1.0)
    - reason: short string (Write this in ${language})
-   - suggested_actions: array of strings (allowed actions: "modify_agent_system_prompt: ...", "add_agent:Role:desc", "remove_agent:AgentName", "request_credential:provider:reason", "request_references", "reduce_temperature", "increase_temperature") (Write any descriptions/reasons in ${language})
+   - suggested_actions: array of strings (allowed actions: "modify_agent_system_prompt: ...", "add_agent:Role:desc", "remove_agent:AgentName", "request_credential:provider:reason|instructions", "request_references", "reduce_temperature", "increase_temperature", "execute_code:language:base64_encoded_code", "search_web:query") (Write any descriptions/reasons in ${language})
    - patch_for_agent: optional string (system prompt patch)
 Only output valid JSON (start with { and end with }).`;
 

@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from "uuid";
 import { TaskRunner } from "./src/backend/runner";
 import { credentialStore } from "./src/backend/credentials";
 import { getLLMConfig, setLLMConfig } from "./src/backend/llm";
+import { getTasks, getMessages, saveTask } from "./src/backend/db";
 
 async function startServer() {
   const app = express();
@@ -38,13 +39,27 @@ async function startServer() {
   app.post("/api/start-task", (req, res) => {
     const { task, model, max_agents, auto_apply, user_id, language } = req.body;
     const taskId = uuidv4();
-    taskConfigs.set(taskId, { task, model, max_agents, auto_apply, user_id, language });
+    taskConfigs.set(taskId, { task, model, max_agents, auto_apply, user_id, language, task_id: taskId });
+    saveTask(taskId, task, model, language || "English");
     res.json({ task_id: taskId, ws: `/ws/${taskId}` });
+  });
+
+  app.get("/api/history", (req, res) => {
+    res.json(getTasks());
+  });
+
+  app.get("/api/history/:task_id", (req, res) => {
+    res.json(getMessages(req.params.task_id));
   });
 
   app.post("/api/credentials", (req, res) => {
     const { user_id, provider, value } = req.body;
     credentialStore.set(user_id, provider, value);
+    res.json({ status: "ok" });
+  });
+
+  app.delete("/api/credentials/:user_id/:provider", (req, res) => {
+    credentialStore.delete(req.params.user_id, req.params.provider);
     res.json({ status: "ok" });
   });
 
@@ -79,6 +94,8 @@ async function startServer() {
           const msg = JSON.parse(data.toString());
           if (msg.cmd === "stop") {
             runners.get(taskId)?.stop();
+          } else if (msg.cmd === "user_input") {
+            runners.get(taskId)?.handleUserInput(msg.text);
           }
         } catch (e) {
           console.error("WS Message error:", e);

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Terminal, Shield, Key, Settings as SettingsIcon, Play, Square, AlertCircle, CheckCircle2, Download, Eye } from 'lucide-react';
+import { Send, Terminal, Shield, Key, Settings as SettingsIcon, Play, Square, AlertCircle, CheckCircle2, Download, Eye, History, MessageSquare } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MessageKind, WSMessage, AgentMessage, VerifierResult, CredentialRequest, ActionResult } from './types';
+import Markdown from 'react-markdown';
 
 // --- Components ---
 
@@ -52,6 +53,8 @@ const SetupModal = ({ onComplete }: { onComplete: () => void }) => {
                 if (e.target.value === 'openai') setModel('gpt-4o');
                 if (e.target.value === 'anthropic') setModel('claude-3-5-sonnet-20241022');
                 if (e.target.value === 'openrouter') setModel('openai/gpt-4o');
+                if (e.target.value === 'deepseek') setModel('deepseek-chat');
+                if (e.target.value === 'groq') setModel('llama3-8b-8192');
               }}
               className="w-full p-3 rounded-xl border border-black/10 outline-none focus:ring-2 focus:ring-emerald-500/20"
             >
@@ -59,6 +62,8 @@ const SetupModal = ({ onComplete }: { onComplete: () => void }) => {
               <option value="openai">OpenAI</option>
               <option value="anthropic">Anthropic</option>
               <option value="openrouter">OpenRouter</option>
+              <option value="deepseek">DeepSeek</option>
+              <option value="groq">Groq</option>
             </select>
           </div>
 
@@ -147,14 +152,22 @@ const ConfigPanel = ({ onStart, isRunning }: { onStart: (config: any) => void, i
   );
 };
 
-const Chat = ({ messages }: { messages: any[] }) => {
+const Chat = ({ messages, onSendInput, isRunning }: { messages: any[], onSendInput: (text: string) => void, isRunning: boolean }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [inputText, setInputText] = useState('');
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  const handleSend = () => {
+    if (inputText.trim()) {
+      onSendInput(inputText);
+      setInputText('');
+    }
+  };
 
   return (
     <div className="bg-zinc-950 rounded-2xl p-6 shadow-xl border border-white/10 flex flex-col h-[600px]">
@@ -171,6 +184,14 @@ const Chat = ({ messages }: { messages: any[] }) => {
               animate={{ opacity: 1, y: 0 }}
               className="font-mono text-sm"
             >
+              {msg.kind === MessageKind.USER_MESSAGE && (
+                <div className="bg-emerald-900/30 p-4 rounded-lg border border-emerald-500/30 text-emerald-100">
+                  <div className="flex items-center gap-2 font-bold mb-2 text-emerald-400">
+                    <MessageSquare className="w-4 h-4" /> User Instruction
+                  </div>
+                  <p className="whitespace-pre-wrap">{msg.payload.text}</p>
+                </div>
+              )}
               {msg.kind === MessageKind.AGENT_MESSAGE && (
                 <div className="bg-zinc-900/50 p-4 rounded-lg border border-white/5">
                   <div className="flex items-center justify-between mb-2">
@@ -221,11 +242,31 @@ const Chat = ({ messages }: { messages: any[] }) => {
           ))}
         </AnimatePresence>
       </div>
+
+      {isRunning && (
+        <div className="mt-4 pt-4 border-t border-zinc-800 flex gap-2">
+          <input
+            type="text"
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+            placeholder="Send an instruction to the agents..."
+            className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2 text-zinc-100 outline-none focus:border-emerald-500/50 font-mono text-sm"
+          />
+          <button
+            onClick={handleSend}
+            disabled={!inputText.trim()}
+            className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:hover:bg-emerald-600 text-white p-2 rounded-xl transition-colors"
+          >
+            <Send className="w-5 h-5" />
+          </button>
+        </div>
+      )}
     </div>
   );
 };
 
-const Settings = ({ credentials, onAdd }: { credentials: any[], onAdd: (p: string, v: string) => void }) => {
+const Settings = ({ credentials, onAdd, onDelete }: { credentials: any[], onAdd: (p: string, v: string) => void, onDelete: (p: string) => void }) => {
   const [provider, setProvider] = useState('');
   const [value, setValue] = useState('');
 
@@ -257,17 +298,33 @@ const Settings = ({ credentials, onAdd }: { credentials: any[], onAdd: (p: strin
           className="w-full py-3 bg-zinc-100 text-zinc-900 rounded-xl font-medium hover:bg-zinc-200 transition-all flex items-center justify-center gap-2"
         >
           <Key className="w-4 h-4" />
-          Add Credential
+          Save Credential
         </button>
         <div className="pt-4 border-t border-black/5">
           <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Stored Providers</h3>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col gap-2">
             {credentials.length === 0 && <span className="text-zinc-400 text-sm italic">No credentials stored.</span>}
             {credentials.map((c, i) => (
-              <span key={i} className="px-3 py-1 bg-zinc-50 border border-black/5 rounded-full text-sm font-medium flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                {c.provider}
-              </span>
+              <div key={i} className="flex items-center justify-between p-3 bg-zinc-50 border border-black/5 rounded-xl">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span className="font-medium">{c.provider}</span>
+                </div>
+                <div className="flex gap-3">
+                  <button 
+                    onClick={() => setProvider(c.provider)} 
+                    className="text-xs font-bold text-zinc-500 hover:text-zinc-900 transition-colors"
+                  >
+                    Edit
+                  </button>
+                  <button 
+                    onClick={() => onDelete(c.provider)} 
+                    className="text-xs font-bold text-rose-500 hover:text-rose-700 transition-colors"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
         </div>
@@ -290,11 +347,19 @@ const CredentialModal = ({ request, onSubmit, onCancel }: { request: CredentialR
           <Key className="w-8 h-8 text-amber-600" />
         </div>
         <h2 className="text-2xl font-bold mb-2">Credential Required</h2>
-        <p className="text-zinc-500 mb-6">
+        <p className="text-zinc-500 mb-4">
           An agent is requesting a <span className="font-bold text-zinc-900">{request.provider}</span> key.
           <br />
           <span className="text-sm italic">Reason: {request.description}</span>
         </p>
+        
+        {request.instructions && (
+          <div className="mb-6 p-4 bg-amber-50 rounded-xl border border-amber-100 text-sm text-amber-800">
+            <strong>How to get it:</strong><br/>
+            {request.instructions}
+          </div>
+        )}
+
         <input
           type="password"
           autoFocus
@@ -332,12 +397,44 @@ export default function App() {
   const [pendingRequest, setPendingRequest] = useState<CredentialRequest | null>(null);
   const [isSetupComplete, setIsSetupComplete] = useState<boolean | null>(null);
   const [infographic, setInfographic] = useState<string | null>(null);
+  const [finalOutput, setFinalOutput] = useState<string | null>(null);
+  const [history, setHistory] = useState<any[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
     fetchCredentials();
     checkSetup();
+    fetchHistory();
   }, []);
+
+  const fetchHistory = async () => {
+    try {
+      const res = await fetch('/api/history');
+      const data = await res.json();
+      setHistory(data);
+    } catch (e) {
+      console.error("Failed to fetch history", e);
+    }
+  };
+
+  const loadHistoryTask = async (taskId: string) => {
+    try {
+      const res = await fetch(`/api/history/${taskId}`);
+      const data = await res.json();
+      setMessages(data);
+      setInfographic(null);
+      setFinalOutput(null);
+      setIsRunning(false);
+      
+      const finalMsg = data.find((m: any) => m.kind === MessageKind.FINAL_OUTPUT);
+      if (finalMsg) setFinalOutput(finalMsg.payload.content);
+      
+      const infoMsg = data.find((m: any) => m.kind === MessageKind.INFOGRAPHIC_READY);
+      if (infoMsg) setInfographic(infoMsg.payload.html);
+    } catch (e) {
+      console.error("Failed to load task history", e);
+    }
+  };
 
   const checkSetup = async () => {
     try {
@@ -363,6 +460,7 @@ export default function App() {
   const startTask = async (config: any) => {
     setMessages([]);
     setInfographic(null);
+    setFinalOutput(null);
     setIsRunning(true);
     try {
       const res = await fetch('/api/start-task', {
@@ -384,8 +482,11 @@ export default function App() {
           setPendingRequest(msg.payload);
         } else if (msg.kind === MessageKind.INFOGRAPHIC_READY) {
           setInfographic(msg.payload.html);
+        } else if (msg.kind === MessageKind.FINAL_OUTPUT) {
+          setFinalOutput(msg.payload.content);
         } else if (msg.kind === MessageKind.FINISHED || msg.kind === MessageKind.ERROR) {
           setIsRunning(false);
+          fetchHistory();
         }
       };
 
@@ -409,6 +510,23 @@ export default function App() {
       }
     } catch (e) {
       console.error("Failed to add credential", e);
+    }
+  };
+
+  const handleDeleteCredential = async (provider: string) => {
+    try {
+      await fetch(`/api/credentials/demo-user/${provider}`, {
+        method: 'DELETE'
+      });
+      fetchCredentials();
+    } catch (e) {
+      console.error("Failed to delete credential", e);
+    }
+  };
+
+  const handleSendInput = (text: string) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ cmd: 'user_input', text }));
     }
   };
 
@@ -440,14 +558,54 @@ export default function App() {
           </div>
           
           <ConfigPanel onStart={startTask} isRunning={isRunning} />
-          <Settings credentials={credentials} onAdd={handleAddCredential} />
+          <Settings credentials={credentials} onAdd={handleAddCredential} onDelete={handleDeleteCredential} />
+          
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-black/5">
+            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+              <History className="w-5 h-5 text-zinc-500" />
+              History
+            </h2>
+            <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 scrollbar-thin">
+              {history.length === 0 && <span className="text-zinc-400 text-sm italic">No previous tasks.</span>}
+              {history.map((t, i) => (
+                <button
+                  key={i}
+                  onClick={() => loadHistoryTask(t.id)}
+                  className="w-full text-left p-3 rounded-xl border border-black/5 hover:bg-zinc-50 transition-colors"
+                >
+                  <div className="text-sm font-medium text-zinc-900 truncate">{t.task}</div>
+                  <div className="text-xs text-zinc-500 mt-1 flex justify-between">
+                    <span>{t.model}</span>
+                    <span>{new Date(t.ts).toLocaleDateString()}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Right Column: Audit Trail */}
         <div className="lg:col-span-8 space-y-4">
-          <Chat messages={messages} />
+          <Chat messages={messages} onSendInput={handleSendInput} isRunning={isRunning} />
           
           <AnimatePresence>
+            {finalOutput && (
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-8 bg-white border border-black/10 rounded-2xl shadow-xl"
+              >
+                <div className="flex items-center gap-3 mb-6 pb-4 border-b border-black/5">
+                  <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
+                    <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+                  </div>
+                  <h3 className="font-bold text-xl">Final Output</h3>
+                </div>
+                <div className="prose prose-zinc max-w-none">
+                  <Markdown>{finalOutput}</Markdown>
+                </div>
+              </motion.div>
+            )}
             {infographic && (
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}
